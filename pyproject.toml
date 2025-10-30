@@ -1,0 +1,18 @@
+[project]
+name = "idea-capture"
+version = "0.1.0"
+description = "Simple idea capture system with CouchDB backend"
+requires-python = ">=3.13"
+dependencies = [
+    "requests>=2.31.0",
+    "python-dotenv>=1.0.0",
+    "click>=8.1.0",
+    "mcp>=1.0.0",
+]
+
+[project.scripts]
+idea = "idea_capture.cli:main"
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"

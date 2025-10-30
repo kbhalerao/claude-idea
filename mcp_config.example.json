@@ -1,0 +1,15 @@
+{
+  "mcpServers": {
+    "idea-capture": {
+      "command": "python",
+      "args": ["-m", "idea_capture.mcp_server"],
+      "cwd": "/path/to/ToDoMCP",
+      "env": {
+        "COUCHDB_URL": "http://localhost:5984",
+        "COUCHDB_USERNAME": "admin",
+        "COUCHDB_PASSWORD": "your_password",
+        "COUCHDB_DATABASE": "ideas"
+      }
+    }
+  }
+}
