@@ -58,9 +58,18 @@ def add(content, tags, priority, status, metadata):
 @click.option('--priority', type=click.Choice(['low', 'medium', 'high']), help='Filter by priority')
 @click.option('--tag', help='Filter by tag')
 def list(limit, skip, status, priority, tag):
-    """List ideas."""
+    """List ideas. Can combine filters (e.g., --status todo --priority high)."""
     try:
-        if status:
+        # Handle compound queries using optimized views
+        if status and priority:
+            ideas = db.get_by_status_and_priority(status, priority)
+        elif tag and status:
+            ideas = db.get_by_tag_and_status(tag, status)
+        elif tag and priority:
+            # No dedicated view for this, filter in Python
+            ideas = db.search_by_tags(tag)
+            ideas = [i for i in ideas if i.priority == priority]
+        elif status:
             ideas = db.get_by_status(status)
         elif priority:
             ideas = db.get_by_priority(priority)
@@ -72,6 +81,10 @@ def list(limit, skip, status, priority, tag):
         if not ideas:
             click.echo("No ideas found")
             return
+
+        # Apply limit if specified for filtered results
+        if limit and (status or priority or tag):
+            ideas = ideas[:limit]
 
         for idea in ideas:
             _display_idea(idea)
@@ -168,6 +181,75 @@ def next(limit):
             click.echo()
     except Exception as e:
         click.echo(f"Error getting next actions: {e}", err=True)
+        raise click.Abort()
+
+
+@main.command()
+def tags():
+    """List all tags with usage counts."""
+    try:
+        all_tags = db.get_all_tags()
+        if not all_tags:
+            click.echo("No tags found")
+            return
+
+        click.echo("Tags (sorted by usage):\n")
+        # Sort by count descending
+        sorted_tags = sorted(all_tags.items(), key=lambda x: x[1], reverse=True)
+        for tag, count in sorted_tags:
+            click.echo(f"  #{tag:<30} {count} idea(s)")
+    except Exception as e:
+        click.echo(f"Error listing tags: {e}", err=True)
+        raise click.Abort()
+
+
+@main.command()
+def stats():
+    """Show statistics about your ideas."""
+    try:
+        from idea_capture.config import config
+        import requests
+
+        # Get counts by status
+        result = requests.get(
+            f"{config.url}/{config.database}/_design/queries/_view/by_status",
+            params={"group": "true"},
+            auth=config.auth
+        )
+        status_counts = {row["key"]: row["value"] for row in result.json().get("rows", [])}
+
+        # Get counts by priority
+        result = requests.get(
+            f"{config.url}/{config.database}/_design/queries/_view/by_priority",
+            params={"group": "true"},
+            auth=config.auth
+        )
+        priority_counts = {row["key"]: row["value"] for row in result.json().get("rows", [])}
+
+        # Display statistics
+        click.echo("📊 Idea Statistics\n")
+
+        click.echo("By Status:")
+        for status in ['todo', 'in-progress', 'done', 'archived']:
+            count = status_counts.get(status, 0)
+            if count > 0:
+                emoji = {'todo': '☐', 'in-progress': '⏳', 'done': '✓', 'archived': '📦'}
+                click.echo(f"  {emoji[status]} {status:<15} {count}")
+
+        click.echo("\nBy Priority:")
+        for priority in ['high', 'medium', 'low']:
+            count = priority_counts.get(priority, 0)
+            if count > 0:
+                emoji = {'high': '🔴', 'medium': '🟡', 'low': '🟢'}
+                click.echo(f"  {emoji[priority]} {priority:<15} {count}")
+
+        # Get total tags
+        all_tags = db.get_all_tags()
+        total_tags = len(all_tags)
+        click.echo(f"\n🏷️  Total unique tags: {total_tags}")
+
+    except Exception as e:
+        click.echo(f"Error getting statistics: {e}", err=True)
         raise click.Abort()
 
 

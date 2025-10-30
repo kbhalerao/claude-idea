@@ -1,5 +1,6 @@
 """CouchDB database operations."""
 
+import json
 import requests
 from typing import Optional
 from .config import config
@@ -113,49 +114,165 @@ class CouchDBClient:
         """Search ideas by tag."""
         return self.query_view("queries", "by_tag", key=f'"{tag}"')
 
+    def get_by_status_and_priority(self, status: str, priority: str) -> list[JournalIdea]:
+        """Get ideas by status and priority using compound key."""
+        priority_order = {"high": 1, "medium": 2, "low": 3}
+        key = [status, priority_order.get(priority, 4)]
+        return self.query_view("queries", "by_status_and_priority", key=json.dumps(key))
+
+    def get_by_tag_and_status(self, tag: str, status: str) -> list[JournalIdea]:
+        """Get ideas by tag and status using compound key."""
+        key = [tag, status]
+        return self.query_view("queries", "by_tag_and_status", key=json.dumps(key))
+
+    def get_all_tags(self) -> dict[str, int]:
+        """Get all unique tags with usage counts."""
+        result = self._request(
+            "GET", f"{self.config.database}/_design/queries/_view/all_tags", params={"group": "true"}
+        )
+        return {row["key"]: row["value"] for row in result.get("rows", [])}
+
+    def get_metadata_keys(self) -> dict[str, int]:
+        """Get all metadata keys with usage counts."""
+        result = self._request(
+            "GET", f"{self.config.database}/_design/queries/_view/metadata_keys", params={"group": "true"}
+        )
+        return {row["key"]: row["value"] for row in result.get("rows", [])}
+
     def install_design_docs(self):
         """Install design documents for views."""
         design_doc = {
             "_id": "_design/queries",
             "views": {
+                # Simple views with null values - rely on include_docs for efficiency
                 "by_status": {
                     "map": """
                     function(doc) {
                         if (doc.type === 'idea') {
-                            emit(doc.status, doc);
+                            emit(doc.status, null);
                         }
                     }
-                    """
+                    """,
+                    "reduce": "_count"
                 },
                 "by_priority": {
                     "map": """
                     function(doc) {
                         if (doc.type === 'idea') {
-                            emit(doc.priority, doc);
+                            emit(doc.priority, null);
                         }
                     }
-                    """
+                    """,
+                    "reduce": "_count"
                 },
                 "by_tag": {
                     "map": """
                     function(doc) {
                         if (doc.type === 'idea' && doc.tags) {
                             for (var i = 0; i < doc.tags.length; i++) {
-                                emit(doc.tags[i], doc);
+                                emit(doc.tags[i], null);
                             }
                         }
                     }
-                    """
+                    """,
+                    "reduce": "_count"
                 },
                 "next_actions": {
                     "map": """
                     function(doc) {
                         if (doc.type === 'idea' && doc.status === 'todo') {
                             var priority_order = {high: 1, medium: 2, low: 3};
-                            emit(priority_order[doc.priority] || 4, doc);
+                            emit(priority_order[doc.priority] || 4, null);
                         }
                     }
                     """
+                },
+                # Compound key views for multi-criteria filtering
+                "by_status_and_priority": {
+                    "map": """
+                    function(doc) {
+                        if (doc.type === 'idea') {
+                            var priority_order = {high: 1, medium: 2, low: 3};
+                            emit([doc.status, priority_order[doc.priority] || 4], null);
+                        }
+                    }
+                    """
+                },
+                "by_tag_and_status": {
+                    "map": """
+                    function(doc) {
+                        if (doc.type === 'idea' && doc.tags) {
+                            for (var i = 0; i < doc.tags.length; i++) {
+                                emit([doc.tags[i], doc.status], null);
+                            }
+                        }
+                    }
+                    """
+                },
+                # Fauxton-friendly view with formatted display
+                "formatted_list": {
+                    "map": """
+                    function(doc) {
+                        if (doc.type === 'idea') {
+                            var priority_emoji = {high: '🔴', medium: '🟡', low: '🟢'};
+                            var status_emoji = {todo: '☐', 'in-progress': '⏳', done: '✓', archived: '📦'};
+                            var priority_order = {high: 1, medium: 2, low: 3};
+
+                            var tags_display = '';
+                            if (doc.tags && doc.tags.length > 0) {
+                                tags_display = doc.tags.map(function(t) { return '#' + t; }).join(', ');
+                            }
+
+                            var display = status_emoji[doc.status] + ' ' +
+                                         priority_emoji[doc.priority] + ' ' +
+                                         doc.content;
+
+                            if (tags_display) {
+                                display += ' [' + tags_display + ']';
+                            }
+
+                            // Emit with priority order as key for sorting, display string as value
+                            emit([priority_order[doc.priority] || 4, doc.created], {
+                                display: display,
+                                id: doc._id,
+                                content: doc.content,
+                                priority: doc.priority,
+                                status: doc.status,
+                                tags: doc.tags || [],
+                                created: doc.created,
+                                updated: doc.updated
+                            });
+                        }
+                    }
+                    """
+                },
+                # All metadata keys for filtering options
+                "metadata_keys": {
+                    "map": """
+                    function(doc) {
+                        if (doc.type === 'idea' && doc.metadata) {
+                            for (var key in doc.metadata) {
+                                if (doc.metadata.hasOwnProperty(key)) {
+                                    emit(key, doc.metadata[key]);
+                                }
+                            }
+                        }
+                    }
+                    """,
+                    "reduce": "_count"
+                },
+                # All unique tags for autocomplete/filtering
+                "all_tags": {
+                    "map": """
+                    function(doc) {
+                        if (doc.type === 'idea' && doc.tags) {
+                            for (var i = 0; i < doc.tags.length; i++) {
+                                emit(doc.tags[i], 1);
+                            }
+                        }
+                    }
+                    """,
+                    "reduce": "_sum"
                 },
             },
         }

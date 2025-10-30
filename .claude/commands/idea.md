@@ -6,11 +6,13 @@ You are interfacing with a personal journal/idea capture system backed by CouchD
 
 **Available Commands:**
 - `idea add "<content>" [-t tag1] [-t tag2] [-p high|medium|low] [-s todo|in-progress|done|archived]` - Add a new idea/task
-- `idea list [--status STATUS] [--priority PRIORITY] [--tag TAG] [--limit N]` - List ideas
+- `idea list [--status STATUS] [--priority PRIORITY] [--tag TAG] [--limit N]` - List ideas (can combine filters!)
 - `idea next [-l N]` - Show next priority actions (default 5)
 - `idea get <id>` - Get specific idea details
 - `idea update <id> [-c "new content"] [-t tag] [--add-tag tag] [-p PRIORITY] [-s STATUS]` - Update an idea
 - `idea delete <id>` - Delete an idea
+- `idea tags` - Show all tags with usage counts
+- `idea stats` - Show statistics (counts by status, priority, tags)
 
 **Your Task:**
 Interpret the user's natural language request and execute the appropriate `idea` command(s).
@@ -37,6 +39,18 @@ User: "add a reminder to review the authentication docs, tag it as security and 
 
 User: "show me all todo items"
 → Run: `idea list --status todo`
+
+User: "show me high priority todos"
+→ Run: `idea list --status todo --priority high`
+
+User: "what are all my idea-tool tasks that are still todo?"
+→ Run: `idea list --tag idea-tool --status todo`
+
+User: "show me all my tags"
+→ Run: `idea tags`
+
+User: "give me an overview of my ideas"
+→ Run: `idea stats`
 
 **Important:**
 1. Always use the Bash tool to execute the commands
