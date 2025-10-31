@@ -56,10 +56,32 @@ curl -X PUT http://admin:password@localhost:5984/_node/_local/_config/cors/crede
 
 ### 2. Install the CLI Tool
 
-Clone this repository and install:
+Clone this repository:
 
 ```bash
-cd idea-capture
+git clone <repository-url>
+cd claude-idea
+```
+
+Then install using either **uv** (recommended) or **pip**:
+
+**Option A: Using uv (recommended)**
+
+```bash
+# For systemwide installation (makes 'idea' command available everywhere)
+uv tool install .
+
+# Or for development (editable install)
+uv pip install -e .
+```
+
+**Option B: Using pip**
+
+```bash
+# For systemwide installation
+pip install .
+
+# Or for development (editable install)
 pip install -e .
 ```
 
@@ -125,8 +147,11 @@ idea add "Research ML frameworks" -m '{"context": "for new project", "link": "ht
 #### List ideas
 
 ```bash
-# All ideas
+# Active ideas (excludes completed tasks by default)
 idea list
+
+# Show all ideas including completed (done/archived)
+idea list --all
 
 # Filter by status
 idea list --status todo
@@ -137,8 +162,15 @@ idea list --priority high
 # Filter by tag
 idea list --tag work
 
+# Combine filters
+idea list --tag work --priority high
+idea list --tag idea-tool --status todo
+
 # Limit results
 idea list --limit 10
+
+# Show all tasks with a specific tag (including completed)
+idea list --tag work --all
 ```
 
 #### Get next actions
@@ -171,6 +203,26 @@ idea update <id> -p high
 
 ```bash
 idea delete <id>
+```
+
+#### View statistics
+
+```bash
+# Show overview of your ideas
+idea stats
+
+# Output shows:
+# - Active tasks (todo, in-progress)
+# - Completed tasks (done, archived)
+# - Priority breakdown for active tasks only
+# - Total unique tags
+```
+
+#### View all tags
+
+```bash
+# List all tags with usage counts
+idea tags
 ```
 
 ### Natural Language Slash Command (Recommended for Claude Code)
@@ -231,7 +283,7 @@ Add to your Claude Code MCP configuration (`~/.config/claude-code/mcp_servers.js
   "idea-capture": {
     "command": "python",
     "args": ["-m", "idea_capture.mcp_server"],
-    "cwd": "/path/to/ToDoMCP",
+    "cwd": "/path/to/claude-idea",
     "env": {
       "COUCHDB_URL": "http://your-server:5984",
       "COUCHDB_USERNAME": "admin",

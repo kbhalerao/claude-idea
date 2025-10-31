@@ -5,8 +5,9 @@ from pathlib import Path
 from dotenv import load_dotenv
 
 # Load environment variables from .env file
-env_path = Path(__file__).parent.parent / '.env'
-load_dotenv(env_path)
+# Look for .env in current working directory first, then in home directory
+load_dotenv(Path.cwd() / '.env')
+load_dotenv(Path.home() / '.env')
 
 
 class Config:

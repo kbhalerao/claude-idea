@@ -57,8 +57,9 @@ def add(content, tags, priority, status, metadata):
 @click.option('--status', type=click.Choice(['todo', 'in-progress', 'done', 'archived']), help='Filter by status')
 @click.option('--priority', type=click.Choice(['low', 'medium', 'high']), help='Filter by priority')
 @click.option('--tag', help='Filter by tag')
-def list(limit, skip, status, priority, tag):
-    """List ideas. Can combine filters (e.g., --status todo --priority high)."""
+@click.option('--all', '-a', is_flag=True, help='Show all tasks including completed (done/archived)')
+def list(limit, skip, status, priority, tag, all):
+    """List ideas. Can combine filters (e.g., --status todo --priority high). By default, excludes completed tasks."""
     try:
         # Handle compound queries using optimized views
         if status and priority:
@@ -77,6 +78,10 @@ def list(limit, skip, status, priority, tag):
             ideas = db.search_by_tags(tag)
         else:
             ideas = db.list_ideas(limit=limit, skip=skip)
+
+        # Filter out completed tasks unless --all flag is set or explicit status filter was provided
+        if not all and not status:
+            ideas = [i for i in ideas if i.status not in ['done', 'archived']]
 
         if not ideas:
             click.echo("No ideas found")
@@ -218,30 +223,54 @@ def stats():
         )
         status_counts = {row["key"]: row["value"] for row in result.json().get("rows", [])}
 
-        # Get counts by priority
-        result = requests.get(
-            f"{config.url}/{config.database}/_design/queries/_view/by_priority",
-            params={"group": "true"},
-            auth=config.auth
-        )
-        priority_counts = {row["key"]: row["value"] for row in result.json().get("rows", [])}
+        # Get all ideas to calculate priority counts for incomplete tasks
+        all_ideas = db.list_ideas()
+        incomplete_ideas = [i for i in all_ideas if i.status not in ['done', 'archived']]
+
+        # Count priorities for incomplete tasks
+        incomplete_priority_counts = {}
+        for idea in incomplete_ideas:
+            incomplete_priority_counts[idea.priority] = incomplete_priority_counts.get(idea.priority, 0) + 1
 
         # Display statistics
         click.echo("📊 Idea Statistics\n")
 
-        click.echo("By Status:")
-        for status in ['todo', 'in-progress', 'done', 'archived']:
+        # Active (incomplete) tasks
+        click.echo("🔥 Active Tasks:")
+        active_count = 0
+        for status in ['todo', 'in-progress']:
             count = status_counts.get(status, 0)
+            active_count += count
             if count > 0:
-                emoji = {'todo': '☐', 'in-progress': '⏳', 'done': '✓', 'archived': '📦'}
+                emoji = {'todo': '☐', 'in-progress': '⏳'}
                 click.echo(f"  {emoji[status]} {status:<15} {count}")
 
-        click.echo("\nBy Priority:")
-        for priority in ['high', 'medium', 'low']:
-            count = priority_counts.get(priority, 0)
+        if active_count == 0:
+            click.echo(f"  No active tasks")
+
+        # Completed tasks
+        click.echo("\n✅ Completed Tasks:")
+        completed_count = 0
+        for status in ['done', 'archived']:
+            count = status_counts.get(status, 0)
+            completed_count += count
             if count > 0:
-                emoji = {'high': '🔴', 'medium': '🟡', 'low': '🟢'}
-                click.echo(f"  {emoji[priority]} {priority:<15} {count}")
+                emoji = {'done': '✓', 'archived': '📦'}
+                click.echo(f"  {emoji[status]} {status:<15} {count}")
+
+        if completed_count == 0:
+            click.echo(f"  No completed tasks")
+
+        # Priority breakdown (for active tasks only)
+        click.echo("\n📌 Active Tasks by Priority:")
+        if incomplete_priority_counts:
+            for priority in ['high', 'medium', 'low']:
+                count = incomplete_priority_counts.get(priority, 0)
+                if count > 0:
+                    emoji = {'high': '🔴', 'medium': '🟡', 'low': '🟢'}
+                    click.echo(f"  {emoji[priority]} {priority:<15} {count}")
+        else:
+            click.echo(f"  No active tasks")
 
         # Get total tags
         all_tags = db.get_all_tags()

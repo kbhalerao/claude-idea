@@ -88,6 +88,9 @@ class CouchDBClient:
     def query_view(self, design_doc: str, view_name: str, **params) -> list[JournalIdea]:
         """Query a CouchDB view."""
         params["include_docs"] = "true"
+        # Disable reduce when fetching documents (views with reduce functions need this)
+        if "reduce" not in params:
+            params["reduce"] = "false"
         result = self._request(
             "GET", f"{self.config.database}/_design/{design_doc}/_view/{view_name}", params=params
         )

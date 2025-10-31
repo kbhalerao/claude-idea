@@ -19,9 +19,49 @@ PYTHON_VERSION=$(python3 --version | cut -d' ' -f2)
 echo "Found Python $PYTHON_VERSION"
 echo ""
 
-# Install package
-echo "Installing Idea Capture..."
-pip install -e .
+# Detect and use uv if available
+if command -v uv &> /dev/null; then
+    UV_VERSION=$(uv --version | head -n1)
+    echo "Found $UV_VERSION"
+    echo ""
+
+    # Ask user for installation type
+    echo "Choose installation method:"
+    echo "  1) Systemwide (recommended) - 'idea' command available everywhere"
+    echo "  2) Development mode - editable install in current directory"
+    echo ""
+    read -p "Enter choice (1 or 2): " -n 1 -r
+    echo ""
+    echo ""
+
+    if [[ $REPLY == "1" ]]; then
+        echo "Installing systemwide with uv tool..."
+        uv tool install .
+    else
+        echo "Installing in development mode with uv..."
+        uv pip install -e .
+    fi
+else
+    echo "uv not found, using pip..."
+    echo ""
+
+    # Ask user for installation type
+    echo "Choose installation method:"
+    echo "  1) Systemwide (recommended) - 'idea' command available everywhere"
+    echo "  2) Development mode - editable install in current directory"
+    echo ""
+    read -p "Enter choice (1 or 2): " -n 1 -r
+    echo ""
+    echo ""
+
+    if [[ $REPLY == "1" ]]; then
+        echo "Installing systemwide with pip..."
+        pip install .
+    else
+        echo "Installing in development mode with pip..."
+        pip install -e .
+    fi
+fi
 echo ""
 
 # Check if .env exists
