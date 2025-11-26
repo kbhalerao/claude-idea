@@ -1,0 +1,19 @@
+version: '3.8'
+
+services:
+  cos-api:
+    build: .
+    ports:
+      - "8000:8000"
+    environment:
+      - COS_COUCHBASE_HOST=${COS_COUCHBASE_HOST:-macstudio.local}
+      - COS_COUCHBASE_USERNAME=${COS_COUCHBASE_USERNAME:-Administrator}
+      - COS_COUCHBASE_PASSWORD=${COS_COUCHBASE_PASSWORD}
+      - COS_COUCHBASE_BUCKET=${COS_COUCHBASE_BUCKET:-chief_of_staff}
+      - COS_DEFAULT_USER=${COS_DEFAULT_USER:-kaustubh}
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
